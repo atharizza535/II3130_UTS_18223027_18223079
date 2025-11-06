@@ -1,32 +1,19 @@
-import { supabase } from '@/lib/supabaseClient'
+import './styles/globals.css'
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 
-// 🔹 REQUIRED for static export (fixes your Netlify build)
-export async function generateStaticParams() {
-  const { data } = await supabase.from('wiki_pages').select('slug')
-  if (!data) return []
-  return data.map((page) => ({ slug: page.slug }))
+const inter = Inter({ subsets: ['latin'] })
+
+export const metadata: Metadata = {
+  title: 'Virtual Lab Sister',
+  description: 'Interactive distributed systems virtual lab environment',
 }
 
-// 🔹 Page renderer
-export default async function WikiSlugPage({ params }: { params: { slug: string } }) {
-  const { data } = await supabase
-    .from('wiki_pages')
-    .select('*')
-    .eq('slug', params.slug)
-    .single()
-
-  if (!data) {
-    return (
-      <div className="p-6">
-        <h1 className="text-xl font-semibold">404 - Wiki Page Not Found</h1>
-      </div>
-    )
-  }
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">{data.title}</h1>
-      <div className="prose whitespace-pre-wrap">{data.content}</div>
-    </div>
+    <html lang="en">
+      <head />
+      <body className={inter.className}>{children}</body>
+    </html>
   )
 }
