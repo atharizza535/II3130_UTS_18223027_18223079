@@ -1,0 +1,7 @@
+[build]
+  base = "virtual-lab-sister"
+  command = "npm run build"
+  publish = "virtual-lab-sister/.next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
