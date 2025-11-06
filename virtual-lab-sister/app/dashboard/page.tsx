@@ -1,13 +1,29 @@
-// app/dashboard/page.tsx
-import Protected from '@/components/Protected'
+'use client'
 
-export default function DashboardPage() {
-  return (
-    <Protected>
-      <div className="p-6">
-        <h1 className="text-2xl font-semibold mb-4">Dashboard Overview</h1>
-        <p>Welcome to your assistant dashboard!</p>
-      </div>
-    </Protected>
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabaseClient'
+
+export default function Dashboard() {
+  const [user, setUser] = useState<any | null>(null)
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
+
+  useEffect(() => {
+    async function loadUser() {
+      const { data } = await supabase.auth.getSession()
+      if (data.session) setUser(data.session.user)
+      else router.push('/auth/login')
+      setLoading(false)
+    }
+    loadUser()
+  }, [router])
+
+  if (loading) return <p>Loading...</p>
+
+  return user ? (
+    <div className="p-4 text-lg">Welcome, {user.email}</div>
+  ) : (
+    <p>Redirecting to login...</p>
   )
 }
