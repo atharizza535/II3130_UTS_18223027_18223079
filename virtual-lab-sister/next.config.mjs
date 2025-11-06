@@ -1,10 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export', // ✅ replaces "next export"
-  distDir: 'out',   // ✅ export output folder
-  images: { unoptimized: true },
+  output: 'export', // needed for Netlify static hosting
   experimental: {
-    serverActions: true,
+    serverActions: undefined, // remove or comment out
   },
 }
 

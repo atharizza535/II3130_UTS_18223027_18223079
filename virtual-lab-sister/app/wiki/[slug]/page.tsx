@@ -1,12 +1,11 @@
 import { supabase } from '@/lib/supabaseClient'
 
-// ✅ Tell Next which pages to statically export
 export async function generateStaticParams() {
+  // Fetch all slugs from your Supabase table
   const { data } = await supabase.from('wiki_pages').select('slug')
   return (data || []).map((page) => ({ slug: page.slug }))
 }
 
-// ✅ Normal page component
 export default async function WikiSlugPage({ params }: { params: { slug: string } }) {
   const { data } = await supabase
     .from('wiki_pages')
