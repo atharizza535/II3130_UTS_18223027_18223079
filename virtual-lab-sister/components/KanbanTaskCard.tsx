@@ -50,8 +50,9 @@ export default function KanbanTaskCard({ task, onTaskUpdate }: { task: any, onTa
     setIsUploading(true)
 
     try {
+      // This is the line that caused your error. It should work now.
       const { data: fileData, error: fileError } = await supabase.storage
-        .from('task-files') 
+        .from('task-files') // Bucket name
         .upload(`${task.created_by || 'unknown'}/${Date.now()}_${file.name}`, file)
 
       if (fileError) throw fileError
@@ -73,6 +74,11 @@ export default function KanbanTaskCard({ task, onTaskUpdate }: { task: any, onTa
     }
   }
 
+  // *** FIX IS HERE ***
+  // Use the environment variable to build the public URL.
+  const filePublicUrl = task.file_url 
+    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/task-files/${task.file_url}`
+    : null
 
   const title = task.title || 'Tanpa Judul'
   const description = task.description || 'Tidak ada deskripsi.'
@@ -127,11 +133,12 @@ export default function KanbanTaskCard({ task, onTaskUpdate }: { task: any, onTa
         </div>
       )}
 
-
-      {task.status === 'done' && task.file_url && (
+      {/* *** FIX IS HERE *** */}
+      {/* Use the 'filePublicUrl' variable in the href */}
+      {task.status === 'done' && filePublicUrl && (
         <div className="pt-3 border-t">
           <a
-            href={`[URL_SUPABASE_ANDA]/storage/v1/object/public/task-files/${task.file_url}`} // GANTI DENGAN URL PROYEK ANDA
+            href={filePublicUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="w-full text-center block px-4 py-2 bg-green-100 text-green-700 rounded-lg font-semibold text-sm hover:bg-green-200"
