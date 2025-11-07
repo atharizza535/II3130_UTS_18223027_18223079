@@ -2,36 +2,44 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabaseServer'
+import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req: Request) {
   try {
-    // Parse the multipart form data
     const formData = await req.formData()
     const taskId = formData.get('taskId') as string
     const file = formData.get('file') as File | null
+    const accessToken = formData.get('accessToken') as string
 
-    console.log('📝 Submit Task - Received:', { taskId, hasFile: !!file, fileName: file?.name })
+    console.log('📝 Submit Task Request:', { 
+      taskId, 
+      hasFile: !!file, 
+      fileName: file?.name,
+      fileSize: file?.size,
+      hasToken: !!accessToken 
+    })
 
-    if (!taskId) {
+    if (!taskId || !file || !accessToken) {
       return NextResponse.json(
-        { error: 'Task ID is required' },
+        { error: 'Missing required fields' },
         { status: 400 }
       )
     }
 
-    if (!file) {
-      return NextResponse.json(
-        { error: 'File is required' },
-        { status: 400 }
-      )
-    }
+    // Step 1: Verify user with their token (like CTF does)
+    const userSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${accessToken}`
+          }
+        }
+      }
+    )
 
-    // Create server-side Supabase client (uses cookies automatically)
-    const supabase = await createServerSupabaseClient()
-
-    // 1. Verify user authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await userSupabase.auth.getUser()
 
     console.log('🔐 Auth check:', { 
       hasUser: !!user, 
@@ -41,21 +49,37 @@ export async function POST(req: Request) {
     })
 
     if (authError || !user) {
-      console.error('❌ Auth error:', authError)
+      console.error('❌ Auth failed:', authError)
       return NextResponse.json(
-        { error: 'Unauthorized - Please login again' },
+        { 
+          error: 'Unauthorized - Please login again',
+          details: authError?.message
+        },
         { status: 401 }
       )
     }
 
-    // 2. Upload file to Supabase Storage
-    const fileName = `${user.id}/${Date.now()}_${file.name}`
-    
-    console.log('📤 Uploading file:', fileName)
+    // Step 2: Upload file using SERVICE ROLE (bypasses all RLS)
+    // This is the KEY difference - we use service role for storage!
+    const serviceSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!, // Service role key!
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    )
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const fileName = `${user.id}/${Date.now()}_${file.name}`
+    console.log('📤 Uploading with SERVICE ROLE:', fileName)
+
+    const fileBuffer = await file.arrayBuffer()
+    
+    const { data: uploadData, error: uploadError } = await serviceSupabase.storage
       .from('task-files')
-      .upload(fileName, file, {
+      .upload(fileName, fileBuffer, {
         contentType: file.type,
         upsert: false
       })
@@ -70,8 +94,8 @@ export async function POST(req: Request) {
 
     console.log('✅ File uploaded:', uploadData.path)
 
-    // 3. Update the task in database (server-side bypasses RLS)
-    const { data: taskData, error: updateError } = await supabase
+    // Step 3: Update task using USER's token (like CTF does for submissions)
+    const { data: taskData, error: updateError } = await userSupabase
       .from('tasks')
       .update({
         status: 'done',
@@ -84,28 +108,23 @@ export async function POST(req: Request) {
     if (updateError) {
       console.error('❌ Task update error:', updateError)
       
-      // Clean up uploaded file if task update fails
-      await supabase.storage.from('task-files').remove([fileName])
-      
-      if (updateError.code === '42501') {
-        return NextResponse.json(
-          { error: 'Permission denied to update task' },
-          { status: 403 }
-        )
-      }
+      // Clean up uploaded file
+      await serviceSupabase.storage.from('task-files').remove([fileName])
       
       return NextResponse.json(
-        { error: 'Failed to update task', details: updateError.message },
+        { 
+          error: 'Failed to update task', 
+          details: updateError.message 
+        },
         { status: 500 }
       )
     }
 
-    console.log('✅ Task updated successfully:', taskData.id)
+    console.log('✅ Task updated successfully')
 
     return NextResponse.json({ 
       success: true, 
-      data: taskData,
-      fileUrl: uploadData.path
+      data: taskData
     })
 
   } catch (err: any) {
