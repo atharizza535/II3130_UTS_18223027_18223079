@@ -1,33 +1,61 @@
 'use client'
 import { supabase } from '@/lib/supabaseClient'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
+
+  // Check if already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        router.push('/dashboard')
+      }
+    }
+    checkAuth()
+  }, [router])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setLoading(true)
 
-    // Send magic link
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`, // ✅ Ensure redirect target
-      },
-    })
+    console.log('🔐 Login attempt for:', email)
 
-    setLoading(false)
+    try {
+      // Get the current origin
+      const origin = window.location.origin
+      const redirectUrl = `${origin}/auth/callback`
 
-    if (error) {
-      console.error('Login error:', error.message)
-      setError(error.message)
-    } else {
-      setSent(true)
+      console.log('📍 Redirect URL:', redirectUrl)
+
+      // Send magic link
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: redirectUrl,
+        },
+      })
+
+      setLoading(false)
+
+      if (error) {
+        console.error('❌ Login error:', error.message)
+        setError(error.message)
+      } else {
+        console.log('✅ Magic link sent successfully')
+        setSent(true)
+      }
+    } catch (err: any) {
+      console.error('💥 Unexpected error:', err)
+      setError(err.message || 'Something went wrong')
+      setLoading(false)
     }
   }
 
@@ -41,31 +69,40 @@ export default function LoginPage() {
         <p className="text-sm text-gray-600 mb-4">Sign in via magic link</p>
 
         {sent ? (
-          <p className="text-green-600 text-sm">
-            ✅ Check your email for the login link!
-          </p>
+          <div className="text-center">
+            <div className="text-green-600 text-5xl mb-4">✅</div>
+            <p className="text-green-600 text-sm font-medium mb-2">
+              Email terkirim!
+            </p>
+            <p className="text-gray-600 text-xs">
+              Cek inbox email Anda untuk link login. Klik link tersebut untuk masuk ke dashboard.
+            </p>
+          </div>
         ) : (
           <>
             <input
               type="email"
-              className="border w-full p-2 rounded mb-3"
+              className="border w-full p-2 rounded mb-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="Email address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              disabled={loading}
             />
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
+              className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? 'Sending...' : 'Send link'}
+              {loading ? 'Mengirim...' : 'Kirim Link Login'}
             </button>
 
             {error && (
-              <p className="text-red-500 text-sm mt-2">
-                ⚠ {error}
-              </p>
+              <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
+                <p className="text-red-600 text-sm">
+                  ⚠️ {error}
+                </p>
+              </div>
             )}
           </>
         )}

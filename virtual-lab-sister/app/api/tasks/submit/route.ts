@@ -148,6 +148,27 @@ export async function POST(req: Request) {
     }
 
     console.log('✅ Task updated successfully with base64 file')
+
+    // Step 5: Create notification for task creator
+    try {
+      const { error: notifError } = await serviceSupabase
+        .from('notifications')
+        .insert({
+          user_id: taskData.created_by,
+          message: `Tugas "${taskData.title}" telah diselesaikan oleh ${user.email}`,
+        })
+
+      if (notifError) {
+        console.error('⚠️ Failed to create notification:', notifError)
+        // Don't fail the request if notification fails
+      } else {
+        console.log('📬 Notification created successfully')
+      }
+    } catch (notifErr) {
+      console.error('⚠️ Notification error:', notifErr)
+      // Don't fail the request if notification fails
+    }
+
     console.log('🏁 ========== TASK SUBMIT SUCCESS ==========')
 
     return NextResponse.json({ 

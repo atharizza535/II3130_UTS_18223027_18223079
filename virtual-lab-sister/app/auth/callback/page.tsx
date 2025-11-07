@@ -9,12 +9,45 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const finishAuth = async () => {
-      const { data } = await supabase.auth.getSession()
-      if (data.session) router.push('/dashboard')
-      else router.push('/auth/login')
+      console.log('🔐 Auth Callback Started')
+      
+      try {
+        // Check if we have a session
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        console.log('Session check:', { 
+          hasSession: !!session, 
+          error: error?.message 
+        })
+
+        if (error) {
+          console.error('Session error:', error)
+          router.push('/auth/login')
+          return
+        }
+
+        if (session) {
+          console.log('✅ Session found, redirecting to dashboard')
+          router.push('/dashboard')
+        } else {
+          console.log('❌ No session, redirecting to login')
+          router.push('/auth/login')
+        }
+      } catch (err) {
+        console.error('Auth callback error:', err)
+        router.push('/auth/login')
+      }
     }
+    
     finishAuth()
   }, [router])
 
-  return <p className="p-4">Finalizing login...</p>
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Finalizing login...</p>
+      </div>
+    </div>
+  )
 }

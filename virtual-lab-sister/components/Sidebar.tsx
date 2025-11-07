@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import NotificationBell from './NotificationBell'
 
 const navItems = [
   { href: '/dashboard', label: '🏠 Dashboard' },
@@ -10,7 +11,6 @@ const navItems = [
   { href: '/dashboard/virtual-lab', label: '🧪 Virtual Lab' },
   { href: '/dashboard/leaderboard', label: '🏆 Leaderboard' },
   { href: '/dashboard/schedule', label: '📅 Schedule' },
-  { href: '/dashboard/notifications', label: '🔔 Notifications' },
 ]
 
 export default function Sidebar() {
@@ -18,12 +18,20 @@ export default function Sidebar() {
   
   return (
     <aside className="w-64 bg-indigo-700 text-white flex flex-col">
-      <div className="p-4">
+      <div className="p-4 border-b border-indigo-600">
         <h1 className="text-2xl font-bold">Virtual Lab</h1>
         <p className="text-sm text-indigo-200 mt-1">Sister Platform</p>
       </div>
+
+      {/* Notification Bell */}
+      <div className="px-4 py-3 border-b border-indigo-600">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">Notifikasi</span>
+          <NotificationBell />
+        </div>
+      </div>
       
-      <nav className="flex-1 space-y-1 p-2">
+      <nav className="flex-1 space-y-1 p-2 overflow-y-auto">
         {navItems.map(item => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           
