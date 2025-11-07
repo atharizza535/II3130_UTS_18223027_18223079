@@ -20,7 +20,6 @@ export async function POST(req: Request) {
     console.log('  - File Size:', file?.size, 'bytes')
     console.log('  - File Type:', file?.type)
     console.log('  - Has Token:', !!accessToken)
-    console.log('  - Token Preview:', accessToken ? accessToken.substring(0, 20) + '...' : 'null')
 
     if (!taskId || !file || !accessToken) {
       return NextResponse.json(
@@ -29,7 +28,7 @@ export async function POST(req: Request) {
       )
     }
 
-    // Check file size (max 5MB to avoid database issues)
+    // Check file size (max 5MB)
     const maxSize = 5 * 1024 * 1024 // 5MB
     if (file.size > maxSize) {
       return NextResponse.json(
@@ -93,7 +92,27 @@ export async function POST(req: Request) {
       base64Length: base64Data.length
     })
 
-    // Step 3: Update task with base64 data using SERVICE ROLE
+    // Step 3: Get the current task to check if it exists
+    const { data: existingTask, error: fetchError } = await userSupabase
+      .from('tasks')
+      .select('id, status')
+      .eq('id', taskId)
+      .single()
+
+    if (fetchError || !existingTask) {
+      console.error('❌ Task not found:', fetchError)
+      return NextResponse.json(
+        { 
+          error: 'Task not found', 
+          details: fetchError?.message 
+        },
+        { status: 404 }
+      )
+    }
+
+    console.log('✅ Task found:', existingTask)
+
+    // Step 4: Update task with SERVICE ROLE to bypass RLS
     const serviceSupabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -105,11 +124,12 @@ export async function POST(req: Request) {
       }
     )
 
+    // Update the task - using service role to avoid RLS/trigger issues
     const { data: taskData, error: updateError } = await serviceSupabase
       .from('tasks')
       .update({
         status: 'done',
-        file_url: JSON.stringify(fileData) // Store as JSON string
+        file_url: JSON.stringify(fileData)
       })
       .eq('id', taskId)
       .select()
@@ -120,13 +140,15 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { 
           error: 'Failed to update task', 
-          details: updateError.message 
+          details: updateError.message,
+          code: updateError.code 
         },
         { status: 500 }
       )
     }
 
     console.log('✅ Task updated successfully with base64 file')
+    console.log('🏁 ========== TASK SUBMIT SUCCESS ==========')
 
     return NextResponse.json({ 
       success: true, 
