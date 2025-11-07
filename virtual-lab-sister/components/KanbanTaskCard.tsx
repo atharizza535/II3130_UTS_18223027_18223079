@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase } from '@/lib/supabaseClient' // Still needed for storage upload
 
 const priorityColors: { [key: string]: string } = {
   High: 'bg-red-100 text-red-700',
@@ -50,19 +50,31 @@ export default function KanbanTaskCard({ task, onTaskUpdate }: { task: any, onTa
     setIsUploading(true)
 
     try {
-      // This is the line that caused your error. It should work now.
+      // Step 1: Upload the file (this was working for you)
       const { data: fileData, error: fileError } = await supabase.storage
-        .from('task-files') // Bucket name
+        .from('task-files') 
         .upload(`${task.created_by || 'unknown'}/${Date.now()}_${file.name}`, file)
 
       if (fileError) throw fileError
 
-      const { error: updateError } = await supabase
-        .from('tasks')
-        .update({ status: 'done', file_url: fileData.path }) 
-        .eq('id', task.id)
+      // *** FIX: Step 2: Call our secure API endpoint ***
+      // We pass the taskId and the new file_url (fileData.path)
+      const response = await fetch('/api/tasks/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId: task.id,
+          file_url: fileData.path
+        })
+      });
 
-      if (updateError) throw updateError
+      if (!response.ok) {
+        // If the API call fails, show an error
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update task status');
+      }
+
+      // Step 3: Refresh the whole task list to move the card
       onTaskUpdate()
 
     } catch (error: any) {
@@ -74,8 +86,6 @@ export default function KanbanTaskCard({ task, onTaskUpdate }: { task: any, onTa
     }
   }
 
-  // *** FIX IS HERE ***
-  // Use the environment variable to build the public URL.
   const filePublicUrl = task.file_url 
     ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/task-files/${task.file_url}`
     : null
@@ -114,6 +124,7 @@ export default function KanbanTaskCard({ task, onTaskUpdate }: { task: any, onTa
         )}
       </div>
 
+      {/* This block ONLY shows if status is 'todo' */}
       {task.status === 'todo' && (
         <div className="pt-3 border-t">
           <input
@@ -133,8 +144,7 @@ export default function KanbanTaskCard({ task, onTaskUpdate }: { task: any, onTa
         </div>
       )}
 
-      {/* *** FIX IS HERE *** */}
-      {/* Use the 'filePublicUrl' variable in the href */}
+      {/* This block ONLY shows if status is 'done' and file_url exists */}
       {task.status === 'done' && filePublicUrl && (
         <div className="pt-3 border-t">
           <a
