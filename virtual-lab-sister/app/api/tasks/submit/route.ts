@@ -26,7 +26,16 @@ export async function POST(req: Request) {
       )
     }
 
-    // Step 1: Verify user with their token (like CTF does)
+    // Check file size (max 5MB to avoid database issues)
+    const maxSize = 5 * 1024 * 1024 // 5MB
+    if (file.size > maxSize) {
+      return NextResponse.json(
+        { error: 'File too large. Maximum size is 5MB.' },
+        { status: 400 }
+      )
+    }
+
+    // Step 1: Verify user with their token
     const userSupabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -59,11 +68,32 @@ export async function POST(req: Request) {
       )
     }
 
-    // Step 2: Upload file using SERVICE ROLE (bypasses all RLS)
-    // This is the KEY difference - we use service role for storage!
+    // Step 2: Convert file to base64
+    console.log('🔄 Converting file to base64...')
+    const fileBuffer = await file.arrayBuffer()
+    const base64Data = Buffer.from(fileBuffer).toString('base64')
+    
+    // Create file metadata object
+    const fileData = {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      data: base64Data,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: user.id
+    }
+
+    console.log('📦 File data prepared:', {
+      name: fileData.name,
+      type: fileData.type,
+      size: fileData.size,
+      base64Length: base64Data.length
+    })
+
+    // Step 3: Update task with base64 data using SERVICE ROLE
     const serviceSupabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!, // Service role key!
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
       {
         auth: {
           autoRefreshToken: false,
@@ -72,34 +102,11 @@ export async function POST(req: Request) {
       }
     )
 
-    const fileName = `${user.id}/${Date.now()}_${file.name}`
-    console.log('📤 Uploading with SERVICE ROLE:', fileName)
-
-    const fileBuffer = await file.arrayBuffer()
-    
-    const { data: uploadData, error: uploadError } = await serviceSupabase.storage
-      .from('task-files')
-      .upload(fileName, fileBuffer, {
-        contentType: file.type,
-        upsert: false
-      })
-
-    if (uploadError) {
-      console.error('❌ Upload error:', uploadError)
-      return NextResponse.json(
-        { error: 'Failed to upload file', details: uploadError.message },
-        { status: 500 }
-      )
-    }
-
-    console.log('✅ File uploaded:', uploadData.path)
-
-    // Step 3: Update task using USER's token (like CTF does for submissions)
-    const { data: taskData, error: updateError } = await userSupabase
+    const { data: taskData, error: updateError } = await serviceSupabase
       .from('tasks')
       .update({
         status: 'done',
-        file_url: uploadData.path
+        file_url: JSON.stringify(fileData) // Store as JSON string
       })
       .eq('id', taskId)
       .select()
@@ -107,10 +114,6 @@ export async function POST(req: Request) {
 
     if (updateError) {
       console.error('❌ Task update error:', updateError)
-      
-      // Clean up uploaded file
-      await serviceSupabase.storage.from('task-files').remove([fileName])
-      
       return NextResponse.json(
         { 
           error: 'Failed to update task', 
@@ -120,7 +123,7 @@ export async function POST(req: Request) {
       )
     }
 
-    console.log('✅ Task updated successfully')
+    console.log('✅ Task updated successfully with base64 file')
 
     return NextResponse.json({ 
       success: true, 
