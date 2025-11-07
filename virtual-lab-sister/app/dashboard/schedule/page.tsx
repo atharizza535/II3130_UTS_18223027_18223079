@@ -19,7 +19,7 @@ const courses = [
   "Sistem dan Arsitektur Komputer",
   "Organisasi dan Arsitektur komputer",
   "Teknologi Platform",
-  "Sistem Paralel dan terdistribusi",
+  "Sistem Paralel dan Terdistribusi",
   "Lainnya"
 ]
 

@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown'
 const courseStyles: { [key: string]: string } = {
   "Jaringan Komputer": 'bg-blue-100 text-blue-700',
   "Sistem Operasi": 'bg-green-100 text-green-700',
-  "Sistem Paralel dan terdistribusi": 'bg-purple-100 text-purple-700',
+  "Sistem Paralel dan Terdistribusi": 'bg-purple-100 text-purple-700',
   "Teknologi Platform": 'bg-yellow-100 text-yellow-700',
 }
 
