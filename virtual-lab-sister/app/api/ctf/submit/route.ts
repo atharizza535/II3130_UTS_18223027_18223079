@@ -64,11 +64,7 @@ export async function POST(req: Request) {
       )
     }
 
-    // Hash the submitted flag
-    const hash = createHash('sha256').update(flag.trim()).digest('hex')
-    console.log('🔐 Flag hash:', hash.substring(0, 16) + '...')
-
-    // Get challenge
+    // Get challenge first
     const { data: chall, error: fetchError } = await supabase
       .from('ctf_challenges')
       .select('*')
@@ -78,6 +74,7 @@ export async function POST(req: Request) {
     console.log('📋 Challenge fetch:', {
       found: !!chall,
       title: chall?.title,
+      flagHash: chall?.flag_hash,
       error: fetchError?.message
     })
       
@@ -92,21 +89,47 @@ export async function POST(req: Request) {
       )
     }
 
+    // Hash the submitted flag
+    const submittedFlag = flag.trim()
+    const submittedHash = createHash('sha256').update(submittedFlag).digest('hex')
+    
+    // DEBUGGING: Log everything
+    console.log('🔍 FLAG COMPARISON DEBUG:')
+    console.log('  Submitted flag (raw):', JSON.stringify(flag))
+    console.log('  Submitted flag (trimmed):', JSON.stringify(submittedFlag))
+    console.log('  Submitted flag length:', submittedFlag.length)
+    console.log('  Submitted hash:', submittedHash)
+    console.log('  Expected hash:', chall.flag_hash)
+    console.log('  Hashes match:', chall.flag_hash === submittedHash)
+    
+    // Try different hash methods to debug
+    const hashVariations = {
+      normal: createHash('sha256').update(submittedFlag).digest('hex'),
+      lowercase: createHash('sha256').update(submittedFlag.toLowerCase()).digest('hex'),
+      uppercase: createHash('sha256').update(submittedFlag.toUpperCase()).digest('hex'),
+      base64: createHash('sha256').update(submittedFlag).digest('base64'),
+    }
+    console.log('  Hash variations:', hashVariations)
+    
     // Compare hashes
-    const correct = chall.flag_hash === hash
-    console.log('✅ Flag check:', { 
-      correct, 
-      submittedHash: hash.substring(0, 16) + '...',
-      expectedHash: chall.flag_hash.substring(0, 16) + '...' 
+    const correct = chall.flag_hash === submittedHash
+    
+    console.log('✅ Flag check result:', { 
+      correct,
+      submittedFlag,
+      submittedHash: submittedHash.substring(0, 32) + '...',
+      expectedHash: chall.flag_hash.substring(0, 32) + '...',
+      fullSubmittedHash: submittedHash,
+      fullExpectedHash: chall.flag_hash
     })
 
-    // Record submission
+    // Record submission - SIMPAN HASH
     const { error: insertError } = await supabase
       .from('ctf_submissions')
       .insert({
         user_id: user.id,
         challenge_id: id,
-        submitted_flag: flag,
+        submitted_flag: submittedHash, // Simpan hash untuk keamanan
         correct,
       })
     
