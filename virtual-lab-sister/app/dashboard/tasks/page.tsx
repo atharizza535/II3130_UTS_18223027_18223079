@@ -1,11 +1,11 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
-import { useRealtime } from '@/lib/useRealtime'
-import TaskCard from '@/components/TaskCard'
 import ErrorDisplay from '@/components/ErrorDisplay'
 import SuccessDisplay from '@/components/SuccessDisplay'
 import DebugPanel from '@/components/DebugPanel'
+import NewTaskModal from '@/components/NewTaskModal'
+import Kanban from './kanban' 
 
 interface ErrorState {
   status?: number
@@ -15,11 +15,12 @@ interface ErrorState {
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<any[]>([])
-  const [newTitle, setNewTitle] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<ErrorState | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [debugInfo, setDebugInfo] = useState<any>({})
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
 
   async function fetchTasks() {
     try {
@@ -38,7 +39,7 @@ export default function TasksPage() {
       }))
 
       if (error) throw error
-      setTasks(data || [])
+      setTasks(data || []) 
     } catch (err: any) {
       console.error('Error fetching tasks:', err)
       setError({
@@ -50,150 +51,56 @@ export default function TasksPage() {
   }
 
   useEffect(() => {
-    // Check auth status
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setDebugInfo((prev: any) => ({
-        ...prev,
-        session: {
-          authenticated: !!session,
-          userId: session?.user?.id,
-          email: session?.user?.email
-        }
-      }))
-    })
-    
     fetchTasks()
   }, [])
 
-  useRealtime('tasks', fetchTasks)
-
-  async function addTask(e: React.FormEvent) {
-    e.preventDefault()
-    
-    if (!newTitle.trim()) {
-      setError({
-        status: 400,
-        message: 'Task title cannot be empty',
-      })
-      return
-    }
-
+  const handleCreateTask = async (formData: FormData) => {
+    console.log("Submitting new task...", formData)
     setLoading(true)
     setError(null)
     setSuccess(null)
 
     try {
-      // Check authentication
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      
-      setDebugInfo((prev: any) => ({
-        ...prev,
-        addTask: {
-          step: 'auth_check',
-          session: !!session,
-          sessionError
-        }
-      }))
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw { status: 401, message: 'Unauthorized' }
 
-      if (sessionError || !session) {
-        throw {
-          status: 401,
-          message: 'You must be logged in to create tasks',
-          details: sessionError
-        }
-      }
+      const title = formData.get('title') as string
+      const description = formData.get('description') as string
+      const course = formData.get('course') as string
+      const assignee = formData.get('assignee') as string // <-- Anda perlu ID asisten
+      const deadline = formData.get('deadline') as string
+      const priority = formData.get('priority') as string
+      const file = formData.get('file') as File
 
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      // TODO: Handle file upload ke Supabase Storage di sini jika ada
+      // let file_url = null
+      // if (file && file.size > 0) {
+      //   const { data: fileData, error: fileError } = await supabase.storage
+      //     .from('task-files') // Ganti 'task-files' dengan nama bucket Anda
+      //     .upload(`${user.id}/${file.name}`, file)
+      //   if (fileError) throw fileError
+      //   file_url = fileData.path
+      // }
 
-      setDebugInfo((prev: any) => ({
-        ...prev,
-        addTask: {
-          ...prev.addTask,
-          step: 'get_user',
-          user: user?.id,
-          userError
-        }
-      }))
-
-      if (userError || !user) {
-        throw {
-          status: 401,
-          message: 'Could not verify user identity',
-          details: userError
-        }
-      }
-
-      // Attempt to insert
-      const taskData = {
-        title: newTitle.trim(),
-        description: 'New Task',
-        status: 'todo',
-        created_by: user.id,
-      }
-
-      setDebugInfo((prev: any) => ({
-        ...prev,
-        addTask: {
-          ...prev.addTask,
-          step: 'inserting',
-          taskData
-        }
-      }))
 
       const { data, error: insertError } = await supabase
         .from('tasks')
-        .insert(taskData)
+        .insert({
+          title: title.trim(),
+          description: description.trim(),
+          due_at: deadline || null,
+          status: 'todo', 
+          created_by: user.id,
+        })
         .select()
+        .single()
 
-      setDebugInfo((prev: any) => ({
-        ...prev,
-        addTask: {
-          ...prev.addTask,
-          step: 'insert_complete',
-          insertResult: { data, insertError },
-          timestamp: new Date().toISOString()
-        }
-      }))
-
-      if (insertError) {
-        // Detailed error based on Supabase error codes
-        let status = 500
-        let message = insertError.message
-
-        if (insertError.code === '23505') {
-          status = 409
-          message = 'Duplicate task'
-        } else if (insertError.code === '42501') {
-          status = 403
-          message = 'Permission denied - Check RLS policies'
-        } else if (insertError.code === '23503') {
-          status = 400
-          message = 'Foreign key constraint violation'
-        } else if (insertError.code === '42P01') {
-          status = 404
-          message = 'Table "tasks" does not exist'
-        }
-
-        throw {
-          status,
-          message,
-          details: {
-            code: insertError.code,
-            hint: insertError.hint,
-            details: insertError.details,
-            original: insertError
-          }
-        }
-      }
-
-      console.log('✅ Task created successfully:', data)
-      setSuccess('Task created successfully!')
-      setNewTitle('')
-      
-      // Auto-dismiss success message
+      if (insertError) throw insertError
+      setSuccess('Tugas berhasil dibuat!')
+      setIsModalOpen(false)
+      await fetchTasks() 
       setTimeout(() => setSuccess(null), 3000)
-      
-      await fetchTasks()
+
     } catch (err: any) {
       console.error('❌ Error creating task:', err)
       setError({
@@ -208,58 +115,40 @@ export default function TasksPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Tasks</h1>
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Manajemen Tugas</h1>
+          <p className="text-gray-600">Kelola tugas asisten untuk setiap mata kuliah</p>
+        </div>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700"
+        >
+          + Tambah Tugas
+        </button>
+      </div>
       
-      {error && (
-        <ErrorDisplay 
-          error={error} 
-          onDismiss={() => setError(null)} 
+
+      <div>
+        <select className="px-4 py-2 border border-gray-300 rounded-lg bg-white">
+          <option>Semua Mata Kuliah</option>
+        </select>
+      </div>
+
+
+      {isModalOpen && (
+        <NewTaskModal
+          onClose={() => setIsModalOpen(false)}
+          onSubmit={handleCreateTask}
         />
       )}
 
-      {success && (
-        <SuccessDisplay 
-          message={success} 
-          onDismiss={() => setSuccess(null)} 
-        />
-      )}
 
+      {error && <ErrorDisplay error={error} onDismiss={() => setError(null)} />}
+      {success && <SuccessDisplay message={success} onDismiss={() => setSuccess(null)} />}
       <DebugPanel data={debugInfo} label="Debug Information" />
 
-      <form onSubmit={addTask} className="flex gap-2">
-        <input
-          value={newTitle}
-          onChange={e => setNewTitle(e.target.value)}
-          className="border p-2 flex-1 rounded focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          placeholder="Add new task"
-          disabled={loading}
-        />
-        <button 
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
-          disabled={loading}
-          type="submit"
-        >
-          {loading ? (
-            <span className="flex items-center gap-2">
-              <span className="animate-spin">⏳</span>
-              Adding...
-            </span>
-          ) : (
-            'Add'
-          )}
-        </button>
-      </form>
-
-      {tasks.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">
-          <p className="text-lg">No tasks yet</p>
-          <p className="text-sm">Create your first task above</p>
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {tasks.map(task => <TaskCard key={task.id} task={task} />)}
-        </div>
-      )}
+      <Kanban />
     </div>
   )
 }
