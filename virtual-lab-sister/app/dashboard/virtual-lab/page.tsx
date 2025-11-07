@@ -67,7 +67,7 @@ export default function VirtualLabPage() {
     },
     {
       title: 'Leaderboard',
-      href: '/dashboard/virtual-lab/leaderboard',
+      href: '/dashboard/leaderboard',
       icon: '🏆',
       description: 'See who\'s on top',
       color: 'bg-yellow-500'
