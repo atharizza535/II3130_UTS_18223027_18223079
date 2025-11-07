@@ -1,11 +1,15 @@
+/* Ganti isi styles/terminal.css dengan ini */
 .terminal {
-  width: 80%;
-  max-width: 600px;
-  background: #111;
-  color: #0f0;
-  font-family: monospace;
+  width: 90%;
+  max-width: 800px;
+  background: #1e1e1e; /* Warna terminal modern */
+  color: #cccccc;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 14px;
   border-radius: 10px;
   overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  border: 1px solid #444;
 }
 .terminal-header {
   background: #333;
@@ -18,10 +22,34 @@
   height: 400px;
   overflow-y: auto;
 }
-.terminal-body input {
+
+/* --- Gaya Input & Prompt --- */
+.terminal-input {
   background: transparent;
   border: none;
-  color: #0f0;
+  color: #cccccc; /* Warna input */
   outline: none;
-  width: 80%;
+  flex-grow: 1; /* Input mengisi sisa space */
+  font-family: inherit;
+  font-size: inherit;
+  padding-left: 5px;
+}
+
+.terminal-prompt-user {
+  color: #8ade8a; /* Hijau untuk user@host */
+}
+.terminal-prompt-path {
+  color: #78dce8; /* Biru muda untuk path */
+}
+
+/* --- Gaya Output Perintah --- */
+.terminal-cmd {
+  color: #f07178; /* Merah muda untuk nama command di 'help' */
+}
+.terminal-dir {
+  color: #78dce8; /* Biru muda untuk direktori (ls) */
+  font-weight: bold;
+}
+.terminal-file {
+  color: #cccccc; /* Putih/abu-abu untuk file (ls) */
 }

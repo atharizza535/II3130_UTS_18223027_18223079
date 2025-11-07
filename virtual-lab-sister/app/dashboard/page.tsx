@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+// HAPUS useRouter, halaman ini tidak boleh redirect
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import useAuth from '@/lib/useAuth' 
@@ -15,8 +15,8 @@ interface DashboardStats {
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const router = useRouter()
-  const [loading, setLoading] = useState(true)
+  // HAPUS router
+  const [loading, setLoading] = useState(true) // 'loading' akan menangani data, bukan auth
   const [stats, setStats] = useState<DashboardStats>({
     activeTasks: 0,
     deadlinesThisWeek: 0,
@@ -28,20 +28,22 @@ export default function Dashboard() {
   const [leaderboardData, setLeaderboardData] = useState<any[]>([])
   const [ctfData, setCtfData] = useState<any[]>([])
 
+  // --- BLOK useEffect YANG DIPERBAIKI ---
   useEffect(() => {
-    if (user === null) {
-      router.push('/auth/login')
-      return
-    }
+    // JANGAN REDIRECT. Biarkan <Protected> di layout yang mengurusnya.
     
+    // Jika user sudah terkonfirmasi (bukan null), muat data dashboard.
     if (user) {
       loadDashboardData()
     }
-  }, [user, router])
+    // Jika user masih null (artinya useAuth masih loading),
+    // loader di bawah (!user) akan menanganinya.
+  }, [user]) // Hapus 'router' dari dependencies
 
   async function loadDashboardData() {
     setLoading(true)
     try {
+      // ... (Seluruh isi fungsi loadDashboardData Anda SAMA, tidak perlu diubah)
       const now = new Date()
       const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
       const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
@@ -109,14 +111,18 @@ export default function Dashboard() {
     }
   }
 
+  // Loader ini sekarang menangani 2 kondisi:
+  // 1. !user (useAuth masih mencari sesi)
+  // 2. loading (loadDashboardData sedang berjalan)
   if (loading || !user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[calc(100vh-100px)]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
       </div>
     )
   }
 
+  // Sisa JSX Anda (return (...)) SAMA PERSIS dan sudah benar.
   return (
     <div className="space-y-6">
       <div>
@@ -222,6 +228,7 @@ export default function Dashboard() {
   )
 }
 
+// ... (Semua komponen StatCard, TaskItem, dll. tetap SAMA) ...
 function StatCard({ title, value, icon, color }: { title: string, value: string, icon: string, color: string }) {
   const colors: { [key: string]: string } = {
     blue: 'bg-blue-100 text-blue-600',
