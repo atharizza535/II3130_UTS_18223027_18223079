@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef } from 'react'
-import { supabase } from '@/lib/supabaseClient' // Still needed for storage upload
+import { supabase } from '@/lib/supabaseClient'
 
 const priorityColors: { [key: string]: string } = {
   High: 'bg-red-100 text-red-700',
@@ -17,7 +17,6 @@ const formatDate = (dateString: string) => {
     year: 'numeric',
   }).format(date)
 }
-
 
 const formatRemainingDays = (dateString: string) => {
   if (!dateString) return null
@@ -37,6 +36,7 @@ const formatRemainingDays = (dateString: string) => {
 
 export default function KanbanTaskCard({ task, onTaskUpdate }: { task: any, onTaskUpdate: () => void }) {
   const [isUploading, setIsUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleUploadClick = () => {
@@ -48,41 +48,56 @@ export default function KanbanTaskCard({ task, onTaskUpdate }: { task: any, onTa
     if (!file) return
 
     setIsUploading(true)
+    setError(null)
 
     try {
-      // Step 1: Upload the file (this was working for you)
+      // Step 1: Get the current session to ensure user is authenticated
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError || !session) {
+        throw new Error('Tidak dapat memverifikasi autentikasi. Silakan login kembali.')
+      }
+
+      // Step 2: Upload the file to Supabase Storage
       const { data: fileData, error: fileError } = await supabase.storage
-        .from('task-files') 
+        .from('task-files')
         .upload(`${task.created_by || 'unknown'}/${Date.now()}_${file.name}`, file)
 
       if (fileError) throw fileError
 
-      // *** FIX: Step 2: Call our secure API endpoint ***
-      // We pass the taskId and the new file_url (fileData.path)
+      // Step 3: Call the secure API endpoint with authentication
+      // The cookies are automatically sent, but we can also verify the session exists
       const response = await fetch('/api/tasks/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Ensure cookies are sent
         body: JSON.stringify({
           taskId: task.id,
           file_url: fileData.path
         })
-      });
+      })
 
       if (!response.ok) {
-        // If the API call fails, show an error
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update task status');
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Gagal mengupdate status tugas')
       }
 
-      // Step 3: Refresh the whole task list to move the card
+      // Step 4: Success - refresh the task list
       onTaskUpdate()
 
     } catch (error: any) {
-      const msg = (error as Error)?.message ?? String(error)
+      const msg = error?.message ?? String(error)
       console.error('Error uploading file and updating task:', msg)
+      setError(msg)
       alert('Gagal mengunggah file: ' + msg)
     } finally {
       setIsUploading(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
     }
   }
 
@@ -124,7 +139,16 @@ export default function KanbanTaskCard({ task, onTaskUpdate }: { task: any, onTa
         )}
       </div>
 
-      {/* This block ONLY shows if status is 'todo' */}
+      {/* Error message */}
+      {error && (
+        <div className="pt-2">
+          <p className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded">
+            {error}
+          </p>
+        </div>
+      )}
+
+      {/* Upload button - only shows if status is 'todo' */}
       {task.status === 'todo' && (
         <div className="pt-3 border-t">
           <input
@@ -137,21 +161,21 @@ export default function KanbanTaskCard({ task, onTaskUpdate }: { task: any, onTa
           <button
             onClick={handleUploadClick}
             disabled={isUploading}
-            className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold text-sm hover:bg-indigo-700 disabled:opacity-50"
+            className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold text-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isUploading ? 'Mengunggah...' : 'Upload File Tugas'}
           </button>
         </div>
       )}
 
-      {/* This block ONLY shows if status is 'done' and file_url exists */}
+      {/* View file button - only shows if status is 'done' and file exists */}
       {task.status === 'done' && filePublicUrl && (
         <div className="pt-3 border-t">
           <a
             href={filePublicUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full text-center block px-4 py-2 bg-green-100 text-green-700 rounded-lg font-semibold text-sm hover:bg-green-200"
+            className="w-full text-center block px-4 py-2 bg-green-100 text-green-700 rounded-lg font-semibold text-sm hover:bg-green-200 transition-colors"
           >
             ✓ Lihat File
           </a>
