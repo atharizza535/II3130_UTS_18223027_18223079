@@ -1,42 +1,37 @@
+// app/auth/login/page.tsx
 'use client'
 import { supabase } from '@/lib/supabaseClient'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import useAuth from '@/lib/useAuth' // <-- Gunakan hook yang sama
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [formLoading, setFormLoading] = useState(false) // <-- Ganti nama 'loading'
   const router = useRouter()
+  
+  const { user, loading: authLoading } = useAuth() // <-- Ambil status auth
 
-  // Check if already logged in
+  // Efek untuk redirect JIKA SUDAH LOGIN
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        router.push('/dashboard')
-      }
+    // Logika IF/ELSE:
+    // JIKA auth loading selesai DAN user ADA (sudah login)
+    if (!authLoading && user) {
+      router.push('/dashboard')
     }
-    checkAuth()
-  }, [router])
+  }, [user, authLoading, router])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    setLoading(true)
+    setFormLoading(true) // <-- Gunakan 'formLoading'
 
-    console.log('🔐 Login attempt for:', email)
-
+    // ... (Sisa fungsi handleLogin Anda SAMA PERSIS)
     try {
-      // Get the current origin - handle both development and production
       const origin = typeof window !== 'undefined' ? window.location.origin : ''
       const redirectUrl = `${origin}/auth/callback`
-
-      console.log('📍 Redirect URL:', redirectUrl)
-      console.log('📍 Current URL:', window.location.href)
-
-      // Send magic link with explicit redirect
       const { data, error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
@@ -44,29 +39,26 @@ export default function LoginPage() {
           shouldCreateUser: true,
         },
       })
-
-      console.log('📧 OTP Response:', { 
-        data, 
-        error: error?.message,
-        session: data?.session
-      })
-
-      setLoading(false)
-
-      if (error) {
-        console.error('❌ Login error:', error)
-        setError(error.message)
-      } else {
-        console.log('✅ Magic link sent successfully to:', email)
-        setSent(true)
-      }
+      if (error) throw error
+      setSent(true)
     } catch (err: any) {
-      console.error('💥 Unexpected error:', err)
       setError(err.message || 'Something went wrong')
-      setLoading(false)
+    } finally {
+      setFormLoading(false) // <-- Gunakan 'formLoading'
     }
   }
 
+  // Tampilkan loader JIKA auth masih loading (mengecek apakah sudah login)
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    )
+  }
+
+  // Tampilkan halaman login JIKA auth selesai DAN user TIDAK ADA
+  // (JSX Anda dari sebelumnya, hanya ganti 'loading' menjadi 'formLoading' di tombol)
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50">
       <form
@@ -95,14 +87,14 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              disabled={loading}
+              disabled={formLoading} // <-- Ganti di sini
             />
             <button
               type="submit"
-              disabled={loading}
+              disabled={formLoading} // <-- Ganti di sini
               className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? 'Mengirim...' : 'Kirim Link Login'}
+              {formLoading ? 'Mengirim...' : 'Kirim Link Login'} 
             </button>
 
             {error && (
